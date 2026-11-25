@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AulaCheck</title>
+<style>
+:root{--bg:#f4f5fb;--fg:#17142b;--card:#fff;--line:#d9dbea;--a:#5b3df5;--ok:#13a07a;--warn:#d98a00;--bad:#d6335a}
+@media (prefers-color-scheme:dark){:root{--bg:#0e0d1c;--fg:#eceaff;--card:#17152e;--line:#2d2a52}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+header,main{max-width:960px;margin:0 auto;padding:20px}
+h1{margin:0}header p{margin:4px 0 0;opacity:.7}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card b{display:block;font-size:1.8rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+h2{margin:0 0 12px;font-size:1.1rem}
+.fila{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+select,input,textarea,button{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+button{background:var(--a);color:#fff;border:0;cursor:pointer}
+textarea{width:100%}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.p-alta{color:var(--bad);font-weight:700}.p-media{color:var(--warn);font-weight:700}.p-baja{color:var(--ok);font-weight:700}
+.msg{min-height:1.4em;color:var(--bad)}
+@media (max-width:640px){.cards{grid-template-columns:1fr}th:nth-child(4),td:nth-child(4){display:none}}
+</style>
+</head>
+<body>
+<header><h1>AulaCheck</h1><p>Gestor de instalaciones e incidencias en centros educativos</p></header>
+<main>
+<div class="cards" id="resumen"></div>
+<section>
+  <h2>Incidencias</h2>
+  <div class="fila">
+    <select id="f-estado" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="abierta">Abierta</option><option value="en_curso">En curso</option><option value="resuelta">Resuelta</option></select>
+    <select id="f-prioridad" aria-label="Filtrar por prioridad"><option value="">Todas las prioridades</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select>
+    <select id="f-centro" aria-label="Filtrar por centro"><option value="">Todos los centros</option></select>
+  </div>
+  <table><thead><tr><th>Incidencia</th><th>Centro</th><th>Prioridad</th><th>Descripción</th><th>Estado</th></tr></thead><tbody id="tabla"></tbody></table>
+</section>
+<section>
+  <h2>Nueva incidencia</h2>
+  <div class="fila">
+    <select id="n-centro" aria-label="Centro"></select>
+    <select id="n-prioridad" aria-label="Prioridad"><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select>
+  </div>
+  <div class="fila"><input id="n-titulo" placeholder="Título" maxlength="120" style="flex:1"></div>
+  <textarea id="n-desc" rows="3" placeholder="Descripción (opcional)"></textarea>
+  <div class="fila" style="margin-top:10px"><button id="n-crear" type="button">Crear incidencia</button><span class="msg" id="msg" role="alert"></span></div>
+</section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const ETIQUETAS = { abierta: 'Abierta', en_curso: 'En curso', resuelta: 'Resuelta' };
+
+async function api(url, opciones) {
+  const r = await fetch(url, opciones);
+  const datos = await r.json();
+  if (!r.ok) throw new Error(datos.error || 'Error');
+  return datos;
+}
+const enviar = (url, cuerpo, metodo = 'POST') =>
+  api(url, { method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+
+function opcion(valor, texto) {
+  const o = document.createElement('option');
+  o.value = valor; o.textContent = texto;
+  return o;
+}
+
+async function cargarCentros() {
+  const centros = await api('/api/centros');
+  centros.forEach((c) => {
+    $('#f-centro').append(opcion(c.id, c.nombre));
+    $('#n-centro').append(opcion(c.id, c.nombre));
+  });
+}
+
+async function cargarResumen() {
+  const r = await api('/api/resumen');
+  $('#resumen').replaceChildren(...Object.entries(ETIQUETAS).map(([clave, nombre]) => {
+    const d = document.createElement('div'); d.className = 'card';
+    const n = document.createElement('b'); n.textContent = r[clave];
+    d.append(n, nombre);
+    return d;
+  }));
+}
+
+async function cargarIncidencias() {
+  const params = new URLSearchParams();
+  [['estado', '#f-estado'], ['prioridad', '#f-prioridad'], ['centro', '#f-centro']]
+    .forEach(([k, sel]) => { if ($(sel).value) params.set(k, $(sel).value); });
+  const filas = await api('/api/incidencias?' + params);
+  $('#tabla').replaceChildren(...filas.map((i) => {
+    const tr = document.createElement('tr');
+    const celda = (t, clase) => { const td = document.createElement('td'); td.textContent = t; if (clase) td.className = clase; return td; };
+    const estado = document.createElement('select');
+    Object.entries(ETIQUETAS).forEach(([v, t]) => estado.append(opcion(v, t)));
+    estado.value = i.estado;
+    estado.setAttribute('aria-label', 'Estado de ' + i.titulo);
+    estado.addEventListener('change', async () => { await enviar('/api/incidencias/' + i.id, { estado: estado.value }, 'PATCH'); recargar(); });
+    const tdEstado = document.createElement('td'); tdEstado.append(estado);
+    tr.append(celda(i.titulo), celda(i.centro), celda(i.prioridad, 'p-' + i.prioridad), celda(i.descripcion), tdEstado);
+    return tr;
+  }));
+}
+
+const recargar = () => Promise.all([cargarResumen(), cargarIncidencias()]);
+
+$('#n-crear').addEventListener('click', async () => {
+  $('#msg').textContent = '';
+  try {
+    await enviar('/api/incidencias', {
+      centro_id: $('#n-centro').value, prioridad: $('#n-prioridad').value,
+      titulo: $('#n-titulo').value, descripcion: $('#n-desc').value
+    });
+    $('#n-titulo').value = ''; $('#n-desc').value = '';
+    recargar();
+  } catch (e) { $('#msg').textContent = e.message; }
+});
+['#f-estado', '#f-prioridad', '#f-centro'].forEach((s) => $(s).addEventListener('change', cargarIncidencias));
+
+cargarCentros().then(recargar);
+</script>
+</body>
+</html>
