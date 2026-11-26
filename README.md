@@ -1,8 +1,12 @@
 # AulaCheck
 
+[![Tests](https://github.com/TurriAF/aulacheck/actions/workflows/tests.yml/badge.svg)](https://github.com/TurriAF/aulacheck/actions/workflows/tests.yml)
+
 Gestor de instalaciones e incidencias para centros educativos. Nace de mi experiencia instalando y configurando pantallas interactivas en colegios e institutos, donde cada centro acumula pequeñas incidencias que conviene tener registradas y priorizadas.
 
 > Los centros e incidencias que trae la base de datos son **datos ficticios de demostración**.
+
+![Captura de AulaCheck](docs/captura.webp)
 
 ## Qué hace
 
